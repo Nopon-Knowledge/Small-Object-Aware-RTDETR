@@ -1,0 +1,5 @@
+__include__: [
+  './rtdetrv2_r18vd_100e_gwhd_a40.yml',
+]
+
+output_dir: ./output/rtdetrv2_s_100e_gwhd_a40_bs24
