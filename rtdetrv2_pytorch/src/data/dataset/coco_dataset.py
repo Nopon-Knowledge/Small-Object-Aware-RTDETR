@@ -46,10 +46,14 @@ class CocoDetection(FasterCocoDetection, DetDataset):
         target = {'image_id': image_id, 'annotations': target}
 
         if self.remap_mscoco_category:
-            image, target = self.prepare(image, target, category2label=mscoco_category2label)
-            # image, target = self.prepare(image, target, category2label=self.category2label)
+            category2label = mscoco_category2label
         else:
-            image, target = self.prepare(image, target)
+            # Detection heads expect labels to be contiguous and zero-based. Most
+            # COCO-style custom datasets keep their public category IDs (often
+            # starting at 1), so remap them consistently at load time.
+            category2label = self.category2label
+
+        image, target = self.prepare(image, target, category2label=category2label)
 
         target['idx'] = torch.tensor([idx])
 
@@ -80,11 +84,13 @@ class CocoDetection(FasterCocoDetection, DetDataset):
 
     @property
     def category2label(self, ):
-        return {cat['id']: i for i, cat in enumerate(self.categories)}
+        categories = sorted(self.categories, key=lambda cat: cat['id'])
+        return {cat['id']: i for i, cat in enumerate(categories)}
 
     @property
     def label2category(self, ):
-        return {i: cat['id'] for i, cat in enumerate(self.categories)}
+        categories = sorted(self.categories, key=lambda cat: cat['id'])
+        return {i: cat['id'] for i, cat in enumerate(categories)}
 
 
 def convert_coco_poly_to_mask(segmentations, height, width):

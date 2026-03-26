@@ -82,6 +82,18 @@ class HungarianMatcher(nn.Module):
         tgt_ids = torch.cat([v["labels"] for v in targets])
         tgt_bbox = torch.cat([v["boxes"] for v in targets])
 
+        if tgt_ids.numel():
+            num_classes = out_prob.shape[-1]
+            min_label = int(tgt_ids.min().item())
+            max_label = int(tgt_ids.max().item())
+            if min_label < 0 or max_label >= num_classes:
+                raise ValueError(
+                    f"Target labels out of range for num_classes={num_classes}. "
+                    f"Found labels in [{min_label}, {max_label}]. "
+                    "If you are using a COCO-style custom dataset, remap "
+                    "category_id values to contiguous zero-based labels."
+                )
+
         # Compute the classification cost. Contrary to the loss, we don't use the NLL,
         # but approximate it in 1 - proba[target class].
         # The 1 is a constant that doesn't change the matching, it can be ommitted.

@@ -1,5 +1,7 @@
 """Copyright(c) 2023 lyuwenyu. All Rights Reserved.
 """
+from pathlib import Path
+
 import torch
 import torch.nn as nn 
 import torch.nn.functional as F 
@@ -29,6 +31,24 @@ donwload_url = {
     50: 'https://github.com/lyuwenyu/storage/releases/download/v0.1/ResNet50_vd_ssld_v2_pretrained_from_paddle.pth',
     101: 'https://github.com/lyuwenyu/storage/releases/download/v0.1/ResNet101_vd_ssld_pretrained_from_paddle.pth',
 }
+
+
+def _resolve_pretrained_state(depth: int, pretrained):
+    if not pretrained:
+        return None
+
+    if isinstance(pretrained, str) and 'http' not in pretrained:
+        return torch.load(pretrained, map_location='cpu')
+
+    url = donwload_url[depth]
+    cached_file = Path(torch.hub.get_dir()) / 'checkpoints' / Path(url).name
+    if cached_file.exists():
+        return torch.load(cached_file, map_location='cpu')
+
+    raise RuntimeError(
+        f'Offline environment cannot download pretrained backbone from {url}. '
+        f'Place the file at {cached_file} or set pretrained to a local path/False.'
+    )
 
 
 class ConvNormLayer(nn.Module):
@@ -211,10 +231,7 @@ class PResNet(nn.Module):
             self._freeze_norm(self)
 
         if pretrained:
-            if isinstance(pretrained, bool) or 'http' in pretrained:
-                state = torch.hub.load_state_dict_from_url(donwload_url[depth], map_location='cpu')
-            else:
-                state = torch.load(pretrained, map_location='cpu')
+            state = _resolve_pretrained_state(depth, pretrained)
             self.load_state_dict(state)
             print(f'Load PResNet{depth} state_dict')
 
@@ -241,5 +258,4 @@ class PResNet(nn.Module):
             if idx in self.return_idx:
                 outs.append(x)
         return outs
-
 

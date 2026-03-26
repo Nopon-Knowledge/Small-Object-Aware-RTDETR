@@ -88,7 +88,7 @@ class YAMLConfig(BaseConfig):
     
     @property
     def scaler(self, ):
-        if self._scaler is None and self.yaml_cfg.get('use_amp', False):
+        if self._scaler is None and self.yaml_cfg.get('use_amp', False) and torch.cuda.is_available():
             self._scaler = create('scaler', self.global_cfg)
         return super().scaler
 
@@ -138,7 +138,13 @@ class YAMLConfig(BaseConfig):
             visited.extend(list(params.keys()))
             # print(params.keys())
 
-        assert len(visited) == len(names), ''
+        if len(visited) != len(names):
+            duplicates = sorted({name for name in visited if visited.count(name) > 1})
+            unseen = sorted(set(names) - set(visited))
+            raise AssertionError(
+                f'Optimizer param groups overlap or miss parameters. '
+                f'duplicates={duplicates[:20]}, unseen={unseen[:20]}'
+            )
 
         return param_groups
 

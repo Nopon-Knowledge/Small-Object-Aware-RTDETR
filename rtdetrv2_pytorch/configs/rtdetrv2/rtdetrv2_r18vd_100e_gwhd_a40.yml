@@ -11,7 +11,9 @@ output_dir: ./output/rtdetrv2_s_100e_gwhd_a40_bs24
 # Single A40: disable sync_bn and reduce checkpoint overhead.
 sync_bn: False
 find_unused_parameters: False
-use_amp: True
+# Disable AMP for the custom GWHD launcher to avoid backend engine issues on
+# cluster CUDA environments.
+use_amp: False
 checkpoint_freq: 5
 print_freq: 20
 
@@ -19,7 +21,9 @@ PResNet:
   depth: 18
   freeze_at: -1
   freeze_norm: False
-  pretrained: True
+  # The GWHD launcher already tunes from a local COCO checkpoint, so avoid
+  # downloading backbone weights on offline clusters.
+  pretrained: False
 
 HybridEncoder:
   in_channels: [128, 256, 512]
@@ -37,9 +41,6 @@ optimizer:
     -
       params: '^(?=.*backbone)(?!.*norm).*$'
       lr: 0.000015
-    -
-      params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn)).*$'
-      weight_decay: 0.
     -
       params: '^(?=.*(?:norm|bn)).*$'
       weight_decay: 0.

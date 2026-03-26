@@ -7,3 +7,4 @@ scipy
 pycocotools
 onnx
 onnxruntime-gpu
+urllib3<2

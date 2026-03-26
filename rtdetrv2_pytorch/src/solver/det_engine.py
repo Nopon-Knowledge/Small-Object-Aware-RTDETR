@@ -15,6 +15,7 @@ import torch
 import torch.amp 
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp.grad_scaler import GradScaler
+from torch.utils.data import Subset
 
 from ..optim import ModelEMA, Warmup
 from ..data import CocoEvaluator
@@ -25,6 +26,39 @@ def _to_float(v):
     if isinstance(v, torch.Tensor):
         return float(v.detach().cpu().item())
     return float(v)
+
+
+def _get_label2category(data_loader):
+    dataset = getattr(data_loader, "dataset", None)
+    for _ in range(10):
+        if dataset is None:
+            return None
+        if hasattr(dataset, "label2category"):
+            return dataset.label2category
+        if isinstance(dataset, Subset):
+            dataset = dataset.dataset
+            continue
+        break
+    return None
+
+
+def _remap_results_category_ids(results, label2category):
+    remapped = []
+    for output in results:
+        labels = output.get("labels")
+        if labels is None or labels.numel() == 0:
+            remapped.append(output)
+            continue
+
+        mapped = torch.as_tensor(
+            [label2category[int(x)] for x in labels.flatten().tolist()],
+            device=labels.device,
+            dtype=labels.dtype,
+        ).reshape(labels.shape)
+
+        remapped.append({**output, "labels": mapped})
+
+    return remapped
 
 
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
@@ -142,6 +176,7 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
     criterion.eval()
     coco_evaluator.cleanup()
     iou_types = coco_evaluator.iou_types
+    label2category = None if getattr(postprocessor, "remap_mscoco_category", False) else _get_label2category(data_loader)
 
     metric_logger = MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -156,6 +191,8 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         
         results = postprocessor(outputs, orig_target_sizes)
+        if label2category is not None:
+            results = _remap_results_category_ids(results, label2category)
 
         # if 'segm' in postprocessor.keys():
         #     target_sizes = torch.stack([t["size"] for t in targets], dim=0)
@@ -185,5 +222,4 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
             stats['coco_eval_masks'] = coco_evaluator.coco_eval['segm'].stats.tolist()
             
     return stats, coco_evaluator
-
 
