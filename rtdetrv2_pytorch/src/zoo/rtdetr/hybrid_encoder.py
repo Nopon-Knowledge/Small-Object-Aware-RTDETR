@@ -16,6 +16,23 @@ from ...core import register
 __all__ = ['HybridEncoder']
 
 
+class DepthwiseConvNorm(nn.Module):
+    def __init__(self, channels, kernel_size, act=None):
+        super().__init__()
+        self.conv = nn.Conv2d(
+            channels,
+            channels,
+            kernel_size,
+            stride=1,
+            padding=(kernel_size - 1) // 2,
+            groups=channels,
+            bias=False)
+        self.norm = nn.BatchNorm2d(channels)
+        self.act = nn.Identity() if act is None else get_activation(act)
+
+    def forward(self, x):
+        return self.act(self.norm(self.conv(x)))
+
 
 class ConvNormLayer(nn.Module):
     def __init__(self, ch_in, ch_out, kernel_size, stride, padding=None, bias=False, act=None):
@@ -112,6 +129,139 @@ class CSPRepLayer(nn.Module):
         return self.conv3(x_1 + x_2)
 
 
+class WheatContextAnchor(nn.Module):
+    def __init__(self, channels, reduction=4, kernel_size=11, act='silu'):
+        super().__init__()
+        hidden_dim = max(channels // reduction, 16)
+        self.pool = nn.AvgPool2d(7, 1, 3)
+        self.pre = nn.Sequential(
+            nn.Conv2d(channels, hidden_dim, 1, bias=False),
+            nn.BatchNorm2d(hidden_dim),
+            get_activation(act))
+        self.h_conv = nn.Conv2d(
+            hidden_dim,
+            hidden_dim,
+            kernel_size=(1, kernel_size),
+            stride=1,
+            padding=(0, kernel_size // 2),
+            groups=hidden_dim,
+            bias=False)
+        self.v_conv = nn.Conv2d(
+            hidden_dim,
+            hidden_dim,
+            kernel_size=(kernel_size, 1),
+            stride=1,
+            padding=(kernel_size // 2, 0),
+            groups=hidden_dim,
+            bias=False)
+        self.post = nn.Sequential(
+            nn.BatchNorm2d(hidden_dim),
+            get_activation(act),
+            nn.Conv2d(hidden_dim, channels, 1, bias=False),
+            nn.BatchNorm2d(channels),
+            nn.Sigmoid())
+
+    def forward(self, x):
+        x = self.pool(x)
+        x = self.pre(x)
+        x = self.h_conv(x)
+        x = self.v_conv(x)
+        return self.post(x)
+
+
+class WheatDetailEdgeGate(nn.Module):
+    def __init__(self, channels, act='silu'):
+        super().__init__()
+        self.avg_pool = nn.AvgPool2d(3, 1, 1)
+        self.dw3 = DepthwiseConvNorm(channels, 3, act=act)
+        self.dw5 = DepthwiseConvNorm(channels, 5, act=act)
+        self.fuse = nn.Sequential(
+            nn.Conv2d(channels * 2, channels, 1, bias=False),
+            nn.BatchNorm2d(channels),
+            get_activation(act),
+            nn.Conv2d(channels, channels, 1, bias=False),
+            nn.Sigmoid())
+
+    def forward(self, x):
+        high_pass = x - self.avg_pool(x)
+        detail = torch.concat([self.dw3(high_pass), self.dw5(high_pass)], dim=1)
+        return self.fuse(detail)
+
+
+class WheatTokenStatisticsGate(nn.Module):
+    def __init__(self, channels, reduction=4, act='silu'):
+        super().__init__()
+        hidden_dim = max(channels // reduction, 16)
+        self.project = nn.Sequential(
+            nn.Conv2d(channels * 4, hidden_dim, 1, bias=False),
+            nn.BatchNorm2d(hidden_dim),
+            get_activation(act),
+            nn.Conv2d(hidden_dim, channels * 2, 1, bias=True),
+            nn.Sigmoid())
+
+    @staticmethod
+    def _stats(x):
+        mean = x.mean(dim=(2, 3), keepdim=True)
+        var = (x - mean).pow(2).mean(dim=(2, 3), keepdim=True)
+        return mean, var
+
+    def forward(self, x_high, x_low):
+        mean_high, var_high = self._stats(x_high)
+        mean_low, var_low = self._stats(x_low)
+        gates = self.project(torch.concat([mean_high, var_high, mean_low, var_low], dim=1))
+        return gates.chunk(2, dim=1)
+
+
+class WheatDetailEnhancer(nn.Module):
+    def __init__(self, channels, act='silu'):
+        super().__init__()
+        self.pre = ConvNormLayer(channels, channels, 1, 1, act=act)
+        self.dw3 = DepthwiseConvNorm(channels, 3, act=act)
+        self.dw5 = DepthwiseConvNorm(channels, 5, act=act)
+        self.post = nn.Sequential(
+            nn.Conv2d(channels * 2, channels, 1, bias=False),
+            nn.BatchNorm2d(channels))
+        self.act = get_activation(act)
+
+    def forward(self, x):
+        base = self.pre(x)
+        detail = torch.concat([self.dw3(base), self.dw5(base)], dim=1)
+        return self.act(x + self.post(detail))
+
+
+class WheatTSECAFFusion(nn.Module):
+    def __init__(self, channels, stats_reduction=4, context_reduction=4, context_kernel_size=11, act='silu'):
+        super().__init__()
+        self.context_anchor = WheatContextAnchor(
+            channels,
+            reduction=context_reduction,
+            kernel_size=context_kernel_size,
+            act=act)
+        self.detail_gate = WheatDetailEdgeGate(channels, act=act)
+        self.statistics_gate = WheatTokenStatisticsGate(channels, reduction=stats_reduction, act=act)
+        self.high_to_low = nn.Sequential(
+            nn.Conv2d(channels, channels, 1, bias=False),
+            nn.BatchNorm2d(channels))
+        self.low_to_high = nn.Sequential(
+            nn.Conv2d(channels, channels, 1, bias=False),
+            nn.BatchNorm2d(channels))
+        self.high_refine = DepthwiseConvNorm(channels, 3, act=act)
+        self.low_refine = DepthwiseConvNorm(channels, 3, act=act)
+
+    def forward(self, x_high, x_low):
+        context_gate = self.context_anchor(x_high)
+        detail_gate = self.detail_gate(x_low)
+
+        high_context = self.high_refine(x_high * (1 + context_gate))
+        low_detail = self.low_refine(x_low * (1 + detail_gate))
+
+        high_gate, low_gate = self.statistics_gate(high_context, low_detail)
+
+        high_out = x_high + self.low_to_high(low_detail) * high_gate
+        low_out = x_low + self.high_to_low(high_context) * low_gate
+        return torch.concat([high_out, low_out], dim=1)
+
+
 # transformer
 class TransformerEncoderLayer(nn.Module):
     def __init__(self,
@@ -198,7 +348,13 @@ class HybridEncoder(nn.Module):
                  depth_mult=1.0,
                  act='silu',
                  eval_spatial_size=None, 
-                 version='v2'):
+                 version='v2',
+                 wheat_fusion=False,
+                 wheat_fusion_stages=None,
+                 wheat_detail_enhance=False,
+                 wheat_context_kernel_size=11,
+                 wheat_context_reduction=4,
+                 wheat_stats_reduction=4):
         super().__init__()
         self.in_channels = in_channels
         self.feat_strides = feat_strides
@@ -209,6 +365,11 @@ class HybridEncoder(nn.Module):
         self.eval_spatial_size = eval_spatial_size        
         self.out_channels = [hidden_dim for _ in range(len(in_channels))]
         self.out_strides = feat_strides
+        self.wheat_fusion = wheat_fusion
+        self.wheat_detail_enhance = wheat_detail_enhance
+        if wheat_fusion_stages is None:
+            wheat_fusion_stages = list(range(len(in_channels) - 1))
+        self.wheat_fusion_stages = set(wheat_fusion_stages)
         
         # channel projection
         self.input_proj = nn.ModuleList()
@@ -247,6 +408,24 @@ class HybridEncoder(nn.Module):
             self.fpn_blocks.append(
                 CSPRepLayer(hidden_dim * 2, hidden_dim, round(3 * depth_mult), act=act, expansion=expansion)
             )
+
+        if self.wheat_fusion:
+            self.wheat_fusion_blocks = nn.ModuleList([
+                WheatTSECAFFusion(
+                    hidden_dim,
+                    stats_reduction=wheat_stats_reduction,
+                    context_reduction=wheat_context_reduction,
+                    context_kernel_size=wheat_context_kernel_size,
+                    act=act)
+                for _ in range(len(in_channels) - 1)
+            ])
+        else:
+            self.wheat_fusion_blocks = nn.ModuleList()
+
+        if self.wheat_detail_enhance:
+            self.low_level_detail = WheatDetailEnhancer(hidden_dim, act=act)
+        else:
+            self.low_level_detail = None
 
         # bottom-up pan
         self.downsample_convs = nn.ModuleList()
@@ -292,6 +471,8 @@ class HybridEncoder(nn.Module):
     def forward(self, feats):
         assert len(feats) == len(self.in_channels)
         proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
+        if self.low_level_detail is not None:
+            proj_feats[0] = self.low_level_detail(proj_feats[0])
         
         # encoder
         if self.num_encoder_layers > 0:
@@ -316,7 +497,12 @@ class HybridEncoder(nn.Module):
             feat_heigh = self.lateral_convs[len(self.in_channels) - 1 - idx](feat_heigh)
             inner_outs[0] = feat_heigh
             upsample_feat = F.interpolate(feat_heigh, scale_factor=2., mode='nearest')
-            inner_out = self.fpn_blocks[len(self.in_channels)-1-idx](torch.concat([upsample_feat, feat_low], dim=1))
+            fusion_stage = len(self.in_channels) - 1 - idx
+            if self.wheat_fusion and fusion_stage in self.wheat_fusion_stages:
+                fusion_input = self.wheat_fusion_blocks[fusion_stage](upsample_feat, feat_low)
+            else:
+                fusion_input = torch.concat([upsample_feat, feat_low], dim=1)
+            inner_out = self.fpn_blocks[len(self.in_channels)-1-idx](fusion_input)
             inner_outs.insert(0, inner_out)
 
         outs = [inner_outs[0]]

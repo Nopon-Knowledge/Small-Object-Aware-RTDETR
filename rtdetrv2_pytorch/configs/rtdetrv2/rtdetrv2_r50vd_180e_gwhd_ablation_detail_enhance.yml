@@ -1,0 +1,8 @@
+__include__: [
+  './rtdetrv2_r50vd_180e_gwhd_a40_high_metric.yml',
+]
+
+output_dir: ./output/rtdetrv2_r50vd_180e_gwhd_ablation_detail_enhance
+
+HybridEncoder:
+  wheat_detail_enhance: True

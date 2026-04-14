@@ -310,7 +310,9 @@ class RTDETRTransformerv2(nn.Module):
                  eps=1e-2, 
                  aux_loss=True, 
                  cross_attn_method='default', 
-                 query_select_method='default'):
+                 query_select_method='default',
+                 anchor_grid_size=0.05,
+                 query_size_prior=0.0):
         super().__init__()
         assert len(feat_channels) <= num_levels
         assert len(feat_strides) == len(feat_channels)
@@ -329,10 +331,12 @@ class RTDETRTransformerv2(nn.Module):
         self.eval_spatial_size = eval_spatial_size
         self.aux_loss = aux_loss
 
-        assert query_select_method in ('default', 'one2many', 'agnostic'), ''
+        assert query_select_method in ('default', 'one2many', 'agnostic', 'agnostic_small'), ''
         assert cross_attn_method in ('default', 'discrete'), ''
         self.cross_attn_method = cross_attn_method
         self.query_select_method = query_select_method
+        self.anchor_grid_size = anchor_grid_size
+        self.query_size_prior = query_size_prior
 
         # backbone feature projection
         self._build_input_proj_layer(feat_channels)
@@ -365,7 +369,7 @@ class RTDETRTransformerv2(nn.Module):
             ('norm', nn.LayerNorm(hidden_dim,)),
         ]))
 
-        if query_select_method == 'agnostic':
+        if query_select_method in ('agnostic', 'agnostic_small'):
             self.enc_score_head = nn.Linear(hidden_dim, 1)
         else:
             self.enc_score_head = nn.Linear(hidden_dim, num_classes)
@@ -454,9 +458,10 @@ class RTDETRTransformerv2(nn.Module):
 
     def _generate_anchors(self,
                           spatial_shapes=None,
-                          grid_size=0.05,
+                          grid_size=None,
                           dtype=torch.float32,
                           device='cpu'):
+        grid_size = self.anchor_grid_size if grid_size is None else grid_size
         if spatial_shapes is None:
             spatial_shapes = []
             eval_h, eval_w = self.eval_spatial_size
@@ -536,6 +541,11 @@ class RTDETRTransformerv2(nn.Module):
 
         elif self.query_select_method == 'agnostic':
             _, topk_ind = torch.topk(outputs_logits.squeeze(-1), topk, dim=-1)
+        elif self.query_select_method == 'agnostic_small':
+            pred_boxes = F.sigmoid(outputs_coords_unact)
+            pred_area = pred_boxes[..., 2] * pred_boxes[..., 3]
+            scores = outputs_logits.squeeze(-1) - self.query_size_prior * pred_area
+            _, topk_ind = torch.topk(scores, topk, dim=-1)
         
         topk_ind: torch.Tensor
 
@@ -591,7 +601,7 @@ class RTDETRTransformerv2(nn.Module):
         if self.training and self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(out_logits[:-1], out_bboxes[:-1])
             out['enc_aux_outputs'] = self._set_aux_loss(enc_topk_logits_list, enc_topk_bboxes_list)
-            out['enc_meta'] = {'class_agnostic': self.query_select_method == 'agnostic'}
+            out['enc_meta'] = {'class_agnostic': self.query_select_method in ('agnostic', 'agnostic_small')}
 
             if dn_meta is not None:
                 out['dn_aux_outputs'] = self._set_aux_loss(dn_out_logits, dn_out_bboxes)

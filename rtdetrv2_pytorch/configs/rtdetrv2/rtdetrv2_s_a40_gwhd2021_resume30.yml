@@ -1,0 +1,6 @@
+__include__: [
+  './rtdetrv2_s_a40_gwhd2021.yml',
+]
+
+output_dir: ./output/rtdetrv2_s_130e_gwhd_a40_resume30
+epoches: 130

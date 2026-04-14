@@ -1,10 +1,11 @@
-"""Convenience launcher for GWHD2021 on single A40.
+"""Convenience launcher for wheat detection datasets on single A40.
 """
 
 import os
 import sys
 import argparse
 from pathlib import Path
+from typing import Optional
 
 import torch
 
@@ -13,24 +14,105 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from src.misc import dist_utils
 from src.core import YAMLConfig, yaml_utils
 from src.solver import TASKS
+try:
+    from project_paths import REPO_ROOT, resolve_first_existing
+except ModuleNotFoundError:
+    from tools.project_paths import REPO_ROOT, resolve_first_existing
+
+
+def checkpoint_candidates(*filenames: str) -> list[Path]:
+    pretrained_dir = os.environ.get("RTDETR_PRETRAINED_DIR")
+    candidates: list[Path] = []
+    for filename in filenames:
+        if pretrained_dir:
+            candidates.append(Path(pretrained_dir).expanduser() / filename)
+        candidates.extend([
+            REPO_ROOT / filename,
+            Path.home() / ".cache" / "torch" / "hub" / "checkpoints" / filename,
+        ])
+    return candidates
 
 
 TRAINING_PRESETS = {
     "baseline": {
         "description": "RT-DETRv2-S GWHD starter profile.",
         "config": "configs/rtdetrv2/rtdetrv2_s_a40_gwhd2021.yml",
-        "tuning_candidates": [
-            Path("/storage/home/402005/python_project/RT-DETR-main/rtdetrv2_r18vd_120e_coco_rerun_48.1.pth"),
-            Path("/storage/home/402005/.cache/torch/hub/checkpoints/rtdetrv2_r18vd_120e_coco_rerun_48.1.pth"),
-        ],
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r18vd_120e_coco_rerun_48.1.pth"),
     },
     "high_metric": {
         "description": "RT-DETRv2-R50 high-metric GWHD profile with larger input size and more queries.",
         "config": "configs/rtdetrv2/rtdetrv2_r50vd_180e_gwhd_a40_high_metric.yml",
-        "tuning_candidates": [
-            Path("/storage/home/402005/python_project/RT-DETR-main/rtdetrv2_r50vd_6x_coco_ema.pth"),
-            Path("/storage/home/402005/.cache/torch/hub/checkpoints/rtdetrv2_r50vd_6x_coco_ema.pth"),
-        ],
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r50vd_6x_coco_ema.pth"),
+    },
+    "wheat_tsecaf": {
+        "description": "RT-DETRv2-R50 GWHD profile with Wheat-TS-ECAF fusion and small-object-aware query selection.",
+        "config": "configs/rtdetrv2/rtdetrv2_r50vd_180e_gwhd_wheat_tsecaf.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r50vd_6x_coco_ema.pth"),
+    },
+    "baseline_r34": {
+        "description": "RT-DETRv2-R34 GWHD baseline profile without Wheat-TS-ECAF fusion.",
+        "config": "configs/rtdetrv2/rtdetrv2_r34vd_180e_gwhd_baseline.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r34vd_120e_coco_ema.pth"),
+    },
+    "baseline_r50": {
+        "description": "RT-DETRv2-R50 GWHD baseline profile without Wheat-TS-ECAF fusion.",
+        "config": "configs/rtdetrv2/rtdetrv2_r50vd_180e_gwhd_baseline.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r50vd_6x_coco_ema.pth"),
+    },
+    "ablation_baseline_r50": {
+        "description": "RT-DETRv2-R50 GWHD ablation baseline used as the reference for TSECAF component studies.",
+        "config": "configs/rtdetrv2/rtdetrv2_r50vd_180e_gwhd_baseline.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r50vd_6x_coco_ema.pth"),
+    },
+    "ablation_wheat_fusion_r50": {
+        "description": "RT-DETRv2-R50 GWHD ablation with Wheat fusion only.",
+        "config": "configs/rtdetrv2/rtdetrv2_r50vd_180e_gwhd_ablation_wheat_fusion.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r50vd_6x_coco_ema.pth"),
+    },
+    "ablation_detail_enhance_r50": {
+        "description": "RT-DETRv2-R50 GWHD ablation with low-level detail enhancement only.",
+        "config": "configs/rtdetrv2/rtdetrv2_r50vd_180e_gwhd_ablation_detail_enhance.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r50vd_6x_coco_ema.pth"),
+    },
+    "ablation_agnostic_small_r50": {
+        "description": "RT-DETRv2-R50 GWHD ablation with agnostic-small query selection only.",
+        "config": "configs/rtdetrv2/rtdetrv2_r50vd_180e_gwhd_ablation_agnostic_small.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r50vd_6x_coco_ema.pth"),
+    },
+    "ablation_full_tsecaf_r50": {
+        "description": "RT-DETRv2-R50 GWHD full TSECAF ablation target with all proposed components enabled.",
+        "config": "configs/rtdetrv2/rtdetrv2_r50vd_180e_gwhd_wheat_tsecaf.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r50vd_6x_coco_ema.pth"),
+    },
+    "wheat_tsecaf_r18": {
+        "description": "RT-DETRv2-R18 GWHD profile with Wheat-TS-ECAF fusion and small-object-aware query selection.",
+        "config": "configs/rtdetrv2/rtdetrv2_r18vd_120e_gwhd_wheat_tsecaf.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r18vd_120e_coco_rerun_48.1.pth"),
+    },
+    "wheat_tsecaf_r34": {
+        "description": "RT-DETRv2-R34 GWHD profile with Wheat-TS-ECAF fusion and small-object-aware query selection.",
+        "config": "configs/rtdetrv2/rtdetrv2_r34vd_180e_gwhd_wheat_tsecaf.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r34vd_120e_coco_ema.pth"),
+    },
+    "wheat_tsecaf_r50": {
+        "description": "RT-DETRv2-R50 GWHD profile with Wheat-TS-ECAF fusion and small-object-aware query selection.",
+        "config": "configs/rtdetrv2/rtdetrv2_r50vd_180e_gwhd_wheat_tsecaf.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r50vd_6x_coco_ema.pth"),
+    },
+    "wheat_tsecaf_r101": {
+        "description": "RT-DETRv2-R101 GWHD profile with Wheat-TS-ECAF fusion and small-object-aware query selection.",
+        "config": "configs/rtdetrv2/rtdetrv2_r101vd_180e_gwhd_wheat_tsecaf.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r101vd_6x_coco_from_paddle.pth"),
+    },
+    "wheat_ears_tsecaf_r18": {
+        "description": "RT-DETRv2-R18 Wheat-TS-ECAF profile for Wheat_Ears_Detection_Dataset.",
+        "config": "configs/rtdetrv2/rtdetrv2_r18vd_120e_wheat_ears_wheat_tsecaf.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r18vd_120e_coco_rerun_48.1.pth"),
+    },
+    "global_wheat_tsecaf_r18": {
+        "description": "RT-DETRv2-R18 Wheat-TS-ECAF profile for labeled Global Wheat Codalab subsets.",
+        "config": "configs/rtdetrv2/rtdetrv2_r18vd_120e_global_wheat_codalab_wheat_tsecaf.yml",
+        "tuning_candidates": checkpoint_candidates("rtdetrv2_r18vd_120e_coco_rerun_48.1.pth"),
     },
 }
 
@@ -44,16 +126,8 @@ def configure_torch_runtime() -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def resolve_checkpoint(candidates) -> str | None:
-    for candidate in candidates:
-        if isinstance(candidate, Path):
-            if candidate.exists():
-                return str(candidate)
-            continue
-        candidate_path = Path(str(candidate))
-        if candidate_path.exists():
-            return str(candidate_path)
-    return None
+def resolve_checkpoint(candidates) -> Optional[str]:
+    return resolve_first_existing(*candidates)
 
 
 def main(args) -> None:
@@ -83,10 +157,10 @@ def main(args) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Train RT-DETRv2 on GWHD2021 with preset hyperparameters."
+        description="Train RT-DETRv2 on wheat detection datasets with preset hyperparameters."
     )
 
-    parser.add_argument("--preset", choices=sorted(TRAINING_PRESETS), default="high_metric")
+    parser.add_argument("--preset", choices=sorted(TRAINING_PRESETS), default="wheat_tsecaf_r18")
     parser.add_argument("-c", "--config", type=str, help="Config path. Defaults to the selected preset.")
     parser.add_argument("-r", "--resume", type=str, help="resume from checkpoint")
     parser.add_argument("-t", "--tuning", type=str, help="tuning from checkpoint")

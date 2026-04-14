@@ -1,0 +1,12 @@
+__include__: [
+  './rtdetrv2_r50vd_180e_gwhd_a40_high_metric.yml',
+]
+
+output_dir: ./output/rtdetrv2_r50vd_180e_gwhd_ablation_wheat_fusion
+
+HybridEncoder:
+  wheat_fusion: True
+  wheat_fusion_stages: [1]
+  wheat_context_kernel_size: 11
+  wheat_context_reduction: 4
+  wheat_stats_reduction: 4

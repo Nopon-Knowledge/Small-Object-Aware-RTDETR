@@ -1,0 +1,91 @@
+__include__: [
+  '../dataset/wheat_ears_detection.yml',
+  '../runtime.yml',
+  './include/dataloader.yml',
+  './include/optimizer.yml',
+  './include/rtdetrv2_r50vd.yml',
+]
+
+output_dir: ./output/eval_rtdetrv2_r50vd_wheat_ears_baseline
+
+sync_bn: False
+find_unused_parameters: False
+use_amp: False
+checkpoint_freq: 5
+print_freq: 20
+
+eval_spatial_size: [1024, 1024]
+
+PResNet:
+  depth: 50
+  freeze_at: -1
+  freeze_norm: False
+  pretrained: False
+
+RTDETRTransformerv2:
+  num_queries: 500
+  num_denoising: 200
+
+RTDETRPostProcessor:
+  num_top_queries: 500
+
+epoches: 180
+clip_max_norm: 0.1
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*backbone)(?!.*norm|bn).*$'
+      lr: 0.000005
+    -
+      params: '^(?=.*backbone)(?=.*norm|bn).*$'
+      lr: 0.000005
+      weight_decay: 0.
+    -
+      params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.
+  lr: 0.00005
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+ema:
+  type: ModelEMA
+  decay: 0.9999
+  warmups: 1500
+
+lr_warmup_scheduler:
+  type: LinearWarmup
+  warmup_duration: 1500
+
+train_dataloader:
+  total_batch_size: 8
+  num_workers: 8
+  dataset:
+    transforms:
+      ops:
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [1024, 1024]}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      policy:
+        name: stop_epoch
+        epoch: 165
+        ops: ['RandomPhotometricDistort', 'RandomZoomOut', 'RandomIoUCrop']
+  collate_fn:
+    scales: [768, 832, 896, 960, 1024, 1024, 1024, 1088]
+    stop_epoch: 165
+
+val_dataloader:
+  total_batch_size: 16
+  num_workers: 8
+  dataset:
+    transforms:
+      ops:
+        - {type: Resize, size: [1024, 1024]}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
