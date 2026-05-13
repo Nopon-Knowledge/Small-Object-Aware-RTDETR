@@ -1,140 +1,218 @@
-English | [简体中文](README_cn.md)
+# Small-Object-Aware Adaptation of RT-DETR for Dense Wheat Head Detection in Field Images
 
+This repository contains the PyTorch implementation used for the paper
+**Small-Object-Aware Adaptation of RT-DETR for Dense Wheat Head Detection in Field Images**.
+It is a reduced research-code release derived from RT-DETRv2 and keeps only the
+components required to reproduce the wheat-head detection experiments.
 
-<h2 align="center">RT-DETR: DETRs Beat YOLOs on Real-time Object Detection</h2>
-<p align="center">
-    <!-- <a href="https://github.com/lyuwenyu/RT-DETR/blob/main/LICENSE">
-        <img alt="license" src="https://img.shields.io/badge/LICENSE-Apache%202.0-blue">
-    </a> -->
-    <a href="https://github.com/lyuwenyu/RT-DETR/blob/main/LICENSE">
-        <img alt="license" src="https://img.shields.io/github/license/lyuwenyu/RT-DETR">
-    </a>
-    <a href="https://github.com/lyuwenyu/RT-DETR/pulls">
-        <img alt="prs" src="https://img.shields.io/github/issues-pr/lyuwenyu/RT-DETR">
-    </a>
-    <a href="https://github.com/lyuwenyu/RT-DETR/issues">
-        <img alt="issues" src="https://img.shields.io/github/issues/lyuwenyu/RT-DETR?color=pink">
-    </a>
-    <a href="https://github.com/lyuwenyu/RT-DETR">
-        <img alt="issues" src="https://img.shields.io/github/stars/lyuwenyu/RT-DETR">
-    </a>
-    <a href="https://arxiv.org/abs/2304.08069">
-        <img alt="arXiv" src="https://img.shields.io/badge/arXiv-2304.08069-red">
-    </a>
-    <a href="mailto: lyuwenyu@foxmail.com">
-        <img alt="emal" src="https://img.shields.io/badge/contact_me-email-yellow">
-    </a>
-</p>
+## What Is Included
 
----
+- RT-DETRv2 training and evaluation code for COCO-style object detection.
+- Wheat-head detection configs for GWHD2021, Wheat Ears, and Global Wheat CodaLab.
+- The proposed small-object-aware changes:
+  - `WheatTSECAFFusion` and low-level detail enhancement in `small_object_aware_rtdetr/src/zoo/rtdetr/hybrid_encoder.py`.
+  - `agnostic_small` query selection, `anchor_grid_size`, and `query_size_prior` in `small_object_aware_rtdetr/src/zoo/rtdetr/rtdetrv2_decoder.py`.
+- Training, direct-transfer evaluation, ablation, visualization, SVG plotting, ONNX export, and profiling tools.
 
+The original Paddle implementation, RT-DETR v1 code, generic COCO/VOC examples,
+classification models, TensorRT benchmark wrappers, IDE metadata, generated outputs,
+datasets, and model weights are intentionally excluded.
 
-This is the official implementation of papers 
-- [DETRs Beat YOLOs on Real-time Object Detection](https://arxiv.org/abs/2304.08069)
-- [RT-DETRv2: Improved Baseline with Bag-of-Freebies for Real-Time Detection Transformer](https://arxiv.org/abs/2407.17140)
+## Repository Layout
 
-
-<details>
-<summary>Fig</summary>
-
-<table><tr>
-<td><img src=https://github.com/lyuwenyu/RT-DETR/assets/77494834/0ede1dc1-a854-43b6-9986-cf9090f11a61 border=0 width=500></td>
-<td><img src=https://github.com/user-attachments/assets/437877e9-1d4f-4d30-85e8-aafacfa0ec56 border=0 width=500></td>
-</tr></table>
-</details>
-
-
-## 🚀 Updates
-- \[2025.11.18\] Release the **newest** member of the RT-DETR family: [RT-DETRv4:Painlessly Furthering Real-Time Object Detection with Vision Foundation Models](https://github.com/RT-DETRs/RT-DETRv4).
-By harnessing the rapidly evolving capabilities of Vision Foundation Models (VFMs), we boost lightweight detectors and, without incurring any extra inference latency, significantly improve the performance of the full-size model.
-- \[2024.11.28\] Add torch tool for parameters and flops statistics. see [run_profile.py](./rtdetrv2_pytorch/tools/run_profile.py)
-- \[2024.10.10\] Add sliced inference support for small object detecion. [#468](https://github.com/lyuwenyu/RT-DETR/pull/468)
-- \[2024.09.23\] Add ✅[Regnet and DLA34](https://github.com/lyuwenyu/RT-DETR/tree/main/rtdetr_pytorch) for RTDETR.
-- \[2024.08.27\] Add hubconf.py file to support torch hub.
-- \[2024.08.22\] Improve the performance of ✅ [RT-DETRv2-S](./rtdetrv2_pytorch/) to 48.1 mAP (<font color=green>+1.6</font> compared to RT-DETR-R18).
-- \[2024.07.24\] Release ✅ [RT-DETRv2](./rtdetrv2_pytorch/)!
-- \[2024.02.27\] Our work has been accepted to CVPR 2024!
-- \[2024.01.23\] Fix difference on data augmentation with paper in rtdetr_pytorch [#84](https://github.com/lyuwenyu/RT-DETR/commit/5dc64138e439247b4e707dd6cebfe19d8d77f5b1).
-- \[2023.11.07\] Add pytorch ✅ *rtdetr_r34vd* for requests [#107](https://github.com/lyuwenyu/RT-DETR/issues/107), [#114](https://github.com/lyuwenyu/RT-DETR/issues/114).
-- \[2023.11.05\] Upgrade the logic of `remap_mscoco_category` to facilitate training of custom datasets, see detils in [*Train custom data*](./rtdetr_pytorch/) part. [#81](https://github.com/lyuwenyu/RT-DETR/commit/95fc522fd7cf26c64ffd2ad0c622c392d29a9ebf).
-- \[2023.10.23\] Add [*discussion for deployments*](https://github.com/lyuwenyu/RT-DETR/issues/95), supported onnxruntime, TensorRT, openVINO.
-- \[2023.10.12\] Add tuning code for pytorch version, now you can tuning rtdetr based on pretrained weights.
-- \[2023.09.19\] Upload ✅ [*pytorch weights*](https://github.com/lyuwenyu/RT-DETR/issues/42) convert from paddle version.
-- \[2023.08.24] Release RT-DETR-R18 pretrained models on objects365. *49.2 mAP* and *217 FPS*.
-- \[2023.08.22\] Upload ✅ [*rtdetr_pytorch*](./rtdetr_pytorch/) source code. Please enjoy it!
-- \[2023.08.15\] Release RT-DETR-R101 pretrained models on objects365. *56.2 mAP* and *74 FPS*.
-- \[2023.07.30\] Release RT-DETR-R50 pretrained models on objects365. *55.3 mAP* and *108 FPS*.
-- \[2023.07.28\] Fix some bugs, and add some comments. [1](https://github.com/lyuwenyu/RT-DETR/pull/14), [2](https://github.com/lyuwenyu/RT-DETR/commit/3b5cbcf8ae3b907e6b8bb65498a6be7c6736eabc).
-- \[2023.07.13\] Upload ✅ [*training logs on coco*](https://github.com/lyuwenyu/RT-DETR/issues/8).
-- \[2023.05.17\] Release RT-DETR-R18, RT-DETR-R34, RT-DETR-R50-m（example for scaled).
-- \[2023.04.17\] Release RT-DETR-R50, RT-DETR-R101, RT-DETR-L, RT-DETR-X.
-
-## 📣 News
-- RTDETR and RTDETRv2 are now available in Hugging Face Transformers. [#413](https://github.com/lyuwenyu/RT-DETR/issues/413), [#549](https://github.com/lyuwenyu/RT-DETR/issues/549)
-- RTDETR is now available in [ultralytics/ultralytics](https://docs.ultralytics.com/zh/models/rtdetr/).
-
-## 📍 Implementations
-- 🔥 RT-DETRv2
-  - paddle: [code&weight](./rtdetrv2_paddle/)
-  - pytorch: [code&weight](./rtdetrv2_pytorch/)
-- 🔥 RT-DETR 
-  - paddle: [code&weight](./rtdetr_paddle)
-  - pytorch: [code&weight](./rtdetr_pytorch)
-
-
-| Model | Input shape | Dataset | $AP^{val}$ | $AP^{val}_{50}$| Params(M) | FLOPs(G) | T4 TensorRT FP16(FPS)
-|:---:|:---:| :---:|:---:|:---:|:---:|:---:|:---:|
-| RT-DETR-R18 | 640 | COCO | 46.5 | 63.8 | 20 | 60 | 217 |
-| RT-DETR-R34 | 640 | COCO | 48.9 | 66.8 | 31 | 92 | 161 |
-| RT-DETR-R50-m | 640 | COCO | 51.3 | 69.6 | 36 | 100 | 145 |
-| RT-DETR-R50 |  640 | COCO | 53.1 | 71.3 | 42 | 136 | 108 |
-| RT-DETR-R101 | 640 | COCO | 54.3 | 72.7 | 76 | 259 | 74 |
-| RT-DETR-HGNetv2-L | 640 | COCO | 53.0 | 71.6 | 32 | 110 | 114 |
-| RT-DETR-HGNetv2-X | 640 | COCO | 54.8 | 73.1 | 67 | 234 | 74 |
-| RT-DETR-R18 | 640 | COCO + Objects365 | **49.2** | **66.6** | 20 | 60 | **217** |
-| RT-DETR-R50 | 640 | COCO + Objects365 | **55.3** | **73.4** | 42 | 136 | **108** |
-| RT-DETR-R101 | 640 | COCO + Objects365 | **56.2** | **74.6** | 76 | 259 | **74** |
-**RT-DETRv2-S** | 640 | COCO  | **48.1** <font color=green>(+1.6)</font> | **65.1** | 20 | 60 | 217 |
-**RT-DETRv2-M**<sup>*<sup> | 640 | COCO  | **49.9** <font color=green>(+1.0)</font> | **67.5** | 31 | 92 | 161 |
-**RT-DETRv2-M** | 640 | COCO | **51.9** <font color=green>(+0.6)</font> | **69.9** | 36 | 100 | 145 |
-**RT-DETRv2-L** | 640 | COCO | **53.4** <font color=green>(+0.3)</font> | **71.6** | 42 | 136 | 108 |
-**RT-DETRv2-X** | 640 | COCO | 54.3 | **72.8** <font color=green>(+0.1)</font>  | 76 | 259| 74 |
-
-**Notes:**
-- `COCO + Objects365` in the table means finetuned model on COCO using pretrained weights trained on Objects365.
-
-
-## 🦄 Performance
-
-### 🏕️ Complex Scenarios
-<div align="center">
-  <img src="https://github.com/lyuwenyu/RT-DETR/assets/77494834/52743892-68c8-4e53-b782-9f89221739e4" width=500 >
-</div>
-
-### 🌋 Difficult Conditions
-<div align="center">
-  <img src="https://github.com/lyuwenyu/RT-DETR/assets/77494834/213cf795-6da6-4261-8549-11947292d3cb" width=500 >
-</div>
-
-## Citation
-If you use `RT-DETR` or `RTDETRv2` in your work, please use the following BibTeX entries:
+```text
+small_object_aware_rtdetr/
+  configs/
+    dataset/                  # COCO-style wheat dataset definitions
+    rtdetrv2/                 # baseline, proposed, ablation, and transfer configs
+    runtime.yml
+  src/
+    core/                     # YAML configuration and object registry
+    data/                     # detection datasets, dataloaders, and transforms
+    misc/                     # logging, distributed helpers, profiling helpers
+    nn/backbone/              # PResNet backbone
+    optim/                    # optimizer, EMA, AMP, warmup
+    solver/                   # train and validation loops
+    zoo/rtdetr/               # RT-DETRv2 model and proposed modules
+  tools/
+    train_gwhd_a40.py         # paper training presets
+    test_gwhd_a40.py          # source-domain and transfer evaluation presets
+    prepare_wheat_datasets.py # dataset conversion helpers
+    visualize_*.py            # prediction and feature-map visualization
+    plot_*.py                 # SVG figure generation from logs/eval files
+    export_onnx.py
+    run_profile.py
 ```
-@misc{lv2023detrs,
-      title={DETRs Beat YOLOs on Real-time Object Detection},
-      author={Yian Zhao and Wenyu Lv and Shangliang Xu and Jinman Wei and Guanzhong Wang and Qingqing Dang and Yi Liu and Jie Chen},
-      year={2023},
-      eprint={2304.08069},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
-}
 
-@misc{lv2024rtdetrv2improvedbaselinebagoffreebies,
-      title={RT-DETRv2: Improved Baseline with Bag-of-Freebies for Real-Time Detection Transformer}, 
-      author={Wenyu Lv and Yian Zhao and Qinyao Chang and Kui Huang and Guanzhong Wang and Yi Liu},
-      year={2024},
-      eprint={2407.17140},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2407.17140}, 
-}
+## Installation
+
+Create a Python environment and install the project dependencies:
+
+```bash
+cd small_object_aware_rtdetr
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
+
+For CUDA training, install the `torch` and `torchvision` wheels that match your
+CUDA runtime before installing the remaining dependencies if your platform needs
+a custom PyTorch package index.
+
+## Datasets
+
+All dataset configs expect COCO-style directories under `small_object_aware_rtdetr/datasets`
+by default. The expected layout is:
+
+```text
+datasets/
+  gwhd_2021/
+    train2017/
+    val2017/
+    annotations/
+      instances_train2017.json
+      instances_val2017.json
+  Wheat_Ears_Detection_Dataset_rtdetr/
+    train2017/
+    val2017/
+    annotations/
+      instances_train2017.json
+      instances_val2017.json
+  global-wheat-codalab-official_rtdetr/
+    train2017/
+    val2017/
+    annotations/
+      instances_train2017.json
+      instances_val2017.json
+```
+
+To keep data outside the repository, set:
+
+```bash
+export WHEAT_DATASETS_ROOT=/path/to/datasets
+```
+
+The helper script can convert the Wheat Ears and Global Wheat CodaLab source
+folders into the COCO-style layouts used by the configs:
+
+```bash
+python tools/prepare_wheat_datasets.py --preset wheat_ears
+python tools/prepare_wheat_datasets.py --preset global_wheat_codalab
+```
+
+## Pretrained Checkpoints
+
+Training presets look for official RT-DETRv2 COCO checkpoints in these locations:
+
+- the repository root,
+- `~/.cache/torch/hub/checkpoints`,
+- the directory pointed to by `RTDETR_PRETRAINED_DIR`.
+
+Example:
+
+```bash
+export RTDETR_PRETRAINED_DIR=/path/to/checkpoints
+```
+
+Model weights and training outputs are not included in this repository.
+
+## Training
+
+Run commands from `small_object_aware_rtdetr/`.
+
+Train the proposed R50 model:
+
+```bash
+python tools/train_gwhd_a40.py --preset small_object_aware_rtdetr_r50
+```
+
+Train the paired baselines:
+
+```bash
+python tools/train_gwhd_a40.py --preset baseline_r18
+python tools/train_gwhd_a40.py --preset baseline_r34
+python tools/train_gwhd_a40.py --preset baseline_r50
+```
+
+Train the R50 ablation variants:
+
+```bash
+python tools/train_gwhd_a40.py --preset ablation_wheat_fusion_r50
+python tools/train_gwhd_a40.py --preset ablation_detail_enhance_r50
+python tools/train_gwhd_a40.py --preset ablation_agnostic_small_r50
+python tools/train_gwhd_a40.py --preset ablation_full_small_object_aware_r50
+```
+
+Outputs are written under `output/`, which is ignored by Git.
+
+## Evaluation
+
+Evaluate on GWHD2021:
+
+```bash
+python tools/test_gwhd_a40.py --preset small_object_aware_rtdetr_r50
+python tools/test_gwhd_a40.py --preset baseline_r50
+```
+
+Evaluate direct transfer to external wheat datasets:
+
+```bash
+python tools/test_gwhd_a40.py --preset wheat_ears_small_object_aware_r50
+python tools/test_gwhd_a40.py --preset global_wheat_codalab_small_object_aware_r50
+python tools/test_gwhd_a40.py --preset wheat_ears_baseline_r50
+python tools/test_gwhd_a40.py --preset global_wheat_codalab_baseline_r50
+```
+
+## Figures and Analysis
+
+Generate SVG figures from saved logs and evaluation dictionaries:
+
+```bash
+python tools/plot_training_curves_svg.py
+python tools/plot_ablation_svg.py
+python tools/plot_generalization_svg.py
+python tools/plot_pr_curves_svg.py
+```
+
+Generate qualitative prediction or feature-map visualizations:
+
+```bash
+python tools/visualize_gwhd_predictions.py --preset small_object_aware_rtdetr_r50_val_best
+python tools/visualize_feature_maps.py --preset gwhd_r50_baseline_vs_small_object_aware
+```
+
+Generated figures are written under `vis_results/`, which is ignored by Git.
+
+## Export and Profiling
+
+Export a trained checkpoint to ONNX:
+
+```bash
+python tools/export_onnx.py \
+  -c configs/rtdetrv2/small_object_aware_rtdetr_r50vd_180e_gwhd.yml \
+  -r output/small_object_aware_rtdetr_r50vd_180e_gwhd/best.pth \
+  -o small_object_aware_rtdetr_r50.onnx \
+  -s 1024 \
+  --check
+```
+
+Profile model parameters and FLOPs:
+
+```bash
+python tools/run_profile.py \
+  -c configs/rtdetrv2/small_object_aware_rtdetr_r50vd_180e_gwhd.yml
+```
+
+## Git Hygiene
+
+The repository ignores local datasets, checkpoints, exported models, logs,
+generated figures, Python caches, and IDE metadata. Before publishing a release,
+check the staging area with:
+
+```bash
+git status --short
+git ls-files -i -c --exclude-standard
+```
+
+## License
+
+This code is released under the license provided in `LICENSE`.

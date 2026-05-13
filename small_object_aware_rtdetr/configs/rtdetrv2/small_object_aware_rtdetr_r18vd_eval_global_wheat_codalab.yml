@@ -1,0 +1,15 @@
+__include__: [
+  './small_object_aware_rtdetr_r18vd_120e_gwhd.yml',
+  '../dataset/global_wheat_codalab_detection.yml',
+]
+
+output_dir: ./output/eval_small_object_aware_rtdetr_r18vd_global_wheat_codalab
+
+val_dataloader:
+  total_batch_size: 16
+  num_workers: 8
+  dataset:
+    transforms:
+      ops:
+        - {type: Resize, size: [1024, 1024]}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}

@@ -1,7 +1,0 @@
-__include__: [
-  './rtdetrv2_r18vd_120e_gwhd_wheat_tsecaf.yml',
-]
-
-output_dir: ./output/rtdetrv2_r18vd_180e_gwhd_wheat_tsecaf_resume
-
-epoches: 180

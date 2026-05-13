@@ -1,0 +1,43 @@
+task: detection
+
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox', ]
+  # Wheat Ears val images contain up to 215 heads, so the COCO default 100
+  # predictions/image underestimates recall in this dense setting.
+  max_dets: [1, 10, 300]
+
+num_classes: 1
+remap_mscoco_category: False
+
+train_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: ${WHEAT_DATASETS_ROOT}/Wheat_Ears_Detection_Dataset_rtdetr/train2017/
+    ann_file: ${WHEAT_DATASETS_ROOT}/Wheat_Ears_Detection_Dataset_rtdetr/annotations/instances_train2017.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~
+  shuffle: True
+  num_workers: 8
+  drop_last: True
+  collate_fn:
+    type: BatchImageCollateFunction
+
+val_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: ${WHEAT_DATASETS_ROOT}/Wheat_Ears_Detection_Dataset_rtdetr/val2017/
+    ann_file: ${WHEAT_DATASETS_ROOT}/Wheat_Ears_Detection_Dataset_rtdetr/annotations/instances_val2017.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops: ~
+  shuffle: False
+  num_workers: 8
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction
