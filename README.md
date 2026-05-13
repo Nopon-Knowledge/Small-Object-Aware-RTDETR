@@ -2,6 +2,7 @@
 
 This repository contains the PyTorch implementation used for the paper
 **Small-Object-Aware Adaptation of RT-DETR for Dense Wheat Head Detection in Field Images**.
+The paper PDF is available at [paper.pdf](paper.pdf).
 It is a reduced research-code release derived from RT-DETRv2 and keeps only the
 components required to reproduce the wheat-head detection experiments.
 
